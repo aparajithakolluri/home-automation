@@ -1,0 +1,99 @@
+#include <WiFi.h>
+
+// Replace with your network credentials
+const char* ssid = "YOUR_WIFI_NAME";
+const char* password = "YOUR_WIFI_PASSWORD";
+
+WiFiServer server(80);
+
+// Relay pins
+int relay1 = 23;
+int relay2 = 22;
+
+String header;
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(relay1, OUTPUT);
+  pinMode(relay2, OUTPUT);
+
+  digitalWrite(relay1, HIGH); // OFF (Active LOW)
+  digitalWrite(relay2, HIGH);
+
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println("\nConnected!");
+  Serial.println(WiFi.localIP());
+
+  server.begin();
+}
+
+void loop() {
+  WiFiClient client = server.available();
+
+  if (client) {
+    Serial.println("New Client Connected");
+    String currentLine = "";
+
+    while (client.connected()) {
+      if (client.available()) {
+        char c = client.read();
+        header += c;
+
+        if (c == '\n') {
+          if (currentLine.length() == 0) {
+
+            // Control logic
+            if (header.indexOf("GET /relay1/on") >= 0) {
+              digitalWrite(relay1, LOW);
+            }
+            if (header.indexOf("GET /relay1/off") >= 0) {
+              digitalWrite(relay1, HIGH);
+            }
+            if (header.indexOf("GET /relay2/on") >= 0) {
+              digitalWrite(relay2, LOW);
+            }
+            if (header.indexOf("GET /relay2/off") >= 0) {
+              digitalWrite(relay2, HIGH);
+            }
+
+            // Web page
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-type:text/html\n");
+
+            client.println("<html><body>");
+            client.println("<h2>ESP32 Home Automation</h2>");
+
+            client.println("<p>Light</p>");
+            client.println("<a href=\"/relay1/on\"><button>ON</button></a>");
+            client.println("<a href=\"/relay1/off\"><button>OFF</button></a>");
+
+            client.println("<p>Fan</p>");
+            client.println("<a href=\"/relay2/on\"><button>ON</button></a>");
+            client.println("<a href=\"/relay2/off\"><button>OFF</button></a>");
+
+            client.println("</body></html>");
+            client.println();
+
+            break;
+          } else {
+            currentLine = "";
+          }
+        } else if (c != '\r') {
+          currentLine += c;
+        }
+      }
+    }
+
+    header = "";
+    client.stop();
+    Serial.println("Client Disconnected");
+  }
+}
